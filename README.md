@@ -3,9 +3,9 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/mhpenta/minimcp.svg)](https://pkg.go.dev/github.com/mhpenta/minimcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Zero dependency mini-MCP server implementation in Go.
+Zero dependency, permissive mini-MCP server implementation in Go.
 
-Implements basic [Model Context Protocol (MCP)](https://modelcontextprotocol.io) functionality. Assumes tool creators build accurate JSON schemas, for instance with [mhpenta/jobj](https://github.com/mhpenta/jobj).
+Implements basic [Model Context Protocol (MCP)](https://modelcontextprotocol.io) functionality. Assumes tool creators build accurate JSON schemas, for instance with the funcschema package of [mhpenta/jobj](https://github.com/mhpenta/jobj). Does not enforce schema validation.
 
 ## Features
 
