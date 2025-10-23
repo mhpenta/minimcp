@@ -103,7 +103,7 @@ import (
 
 // Define input/output types
 type StockPriceInput struct {
-    Symbol string `json:"symbol" jsonschema:"required,description=Stock ticker symbol"`
+    Symbol string `json:"symbol"`
 }
 
 type StockPriceOutput struct {
