@@ -88,6 +88,75 @@ func (t *MyTool) Execute(ctx context.Context, params json.RawMessage) (*tools.To
 }
 ```
 
+### Using with jobj/funcschema
+
+For automatic schema generation from Go functions, use [jobj's funcschema](https://github.com/mhpenta/jobj):
+
+```go
+import (
+    "context"
+    "encoding/json"
+
+    "github.com/mhpenta/minimcp/tools"
+    "github.com/mhpenta/jobj/funcschema"
+)
+
+// Define input/output types
+type StockPriceInput struct {
+    Symbol string `json:"symbol" jsonschema:"required,description=Stock ticker symbol"`
+}
+
+type StockPriceOutput struct {
+    Price      float64 `json:"price"`
+    MarketCap  float64 `json:"market_cap"`
+}
+
+type StockPriceTool struct{}
+
+// Handler function with typed parameters
+func (t *StockPriceTool) GetPrice(ctx context.Context, input StockPriceInput) (StockPriceOutput, error) {
+    // Your implementation here
+    return StockPriceOutput{Price: 150.50, MarketCap: 2.5e12}, nil
+}
+
+func (t *StockPriceTool) Spec() *tools.ToolSpec {
+    // Generate schemas from handler function signature
+    schemaIn, schemaOut, err := funcschema.SafeSchemasFromFunc(t.GetPrice)
+    if err != nil {
+        panic(err)
+    }
+
+    return &tools.ToolSpec{
+        Name:        "get_stock_price",
+        Description: "Fetches current stock price and market cap",
+        Parameters:  schemaIn,  // Auto-generated input schema
+        Output:      schemaOut, // Auto-generated output schema
+    }
+}
+
+func (t *StockPriceTool) Execute(ctx context.Context, params json.RawMessage) (*tools.ToolResult, error) {
+    var input StockPriceInput
+    if err := json.Unmarshal(params, &input); err != nil {  // Or use safeunmarshal from the jobj package
+        return nil, err
+    }
+
+    output, err := t.GetPrice(ctx, input)
+    if err != nil {
+        return nil, err
+    }
+
+    return &tools.ToolResult{
+        Output: output,
+    }, nil
+}
+```
+
+This pattern:
+- Automatically generates JSON schemas from Go types
+- Provides type safety for inputs and outputs
+- Uses struct tags for schema constraints
+- No manual schema writing required
+
 ## Testing
 
 ```bash
