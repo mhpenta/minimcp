@@ -1,3 +1,73 @@
+// Package tools provides interfaces and utilities for creating MCP tools.
+//
+// This package defines the core Tool interface and provides TypedTool, a
+// type-safe abstraction for creating tools with automatic schema generation
+// and safe JSON unmarshalling.
+//
+// # Basic Usage
+//
+// Create a typed tool using NewTool:
+//
+//	type WeatherRequest struct {
+//	    City string `json:"city"`
+//	}
+//
+//	type WeatherResponse struct {
+//	    Temperature float64 `json:"temperature"`
+//	    Conditions  string  `json:"conditions"`
+//	}
+//
+//	func getWeather(ctx context.Context, req WeatherRequest) (WeatherResponse, error) {
+//	    // implementation
+//	    return WeatherResponse{Temperature: 22.5, Conditions: "Sunny"}, nil
+//	}
+//
+//	tool := tools.NewTool(
+//	    "get_weather",
+//	    "Fetches current weather information",
+//	    getWeather,
+//	)
+//
+// # Manual Tool Implementation
+//
+// For more control, implement the Tool interface directly:
+//
+//	type MyTool struct{}
+//
+//	func (t *MyTool) Spec() *tools.ToolSpec {
+//	    return &tools.ToolSpec{
+//	        Name:        "my_tool",
+//	        Description: "Does something useful",
+//	        Parameters:  map[string]interface{}{ /* JSON schema */ },
+//	    }
+//	}
+//
+//	func (t *MyTool) Execute(ctx context.Context, params json.RawMessage) (*tools.ToolResult, error) {
+//	    // implementation
+//	}
+//
+// # Tool Options
+//
+// Customize tool behavior with functional options:
+//
+//	tool := tools.NewTool(
+//	    "my_tool",
+//	    "Description",
+//	    handler,
+//	    tools.WithVerb("Processing"),
+//	    tools.WithLongRunning(true),
+//	    tools.WithType("custom_type"),
+//	)
+//
+// # Error Handling
+//
+// NewTool panics on schema generation errors (fail-fast at initialization).
+// Use NewToolWithError for explicit error handling:
+//
+//	tool, err := tools.NewToolWithError(name, description, handler)
+//	if err != nil {
+//	    // handle error
+//	}
 package tools
 
 import (

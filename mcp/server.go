@@ -1,3 +1,47 @@
+// Package mcp provides a lightweight implementation of the Model Context Protocol (MCP).
+//
+// MCP enables communication between AI systems and tool providers. This implementation
+// includes both stdio (for local tools like Claude Desktop) and HTTP (for remote services)
+// transports, with full JSON-RPC 2.0 support.
+//
+// # Basic Usage
+//
+// Create and start a stdio server (for Claude Desktop):
+//
+//	import (
+//	    "context"
+//	    "github.com/mhpenta/minimcp/mcp"
+//	    "github.com/mhpenta/minimcp/tools"
+//	)
+//
+//	func main() {
+//	    server := mcp.NewServer(mcp.ServerConfig{
+//	        Name:    "my-server",
+//	        Version: "1.0.0",
+//	        Tools:   []tools.Tool{ /* your tools */ },
+//	    })
+//
+//	    transport := mcp.NewStdioTransport(server, nil)
+//	    transport.Start(context.Background())
+//	}
+//
+// # HTTP Transport
+//
+// For remote access via HTTP:
+//
+//	validator := mcp.NewDEVKeyValidator() // or implement your own
+//	httpTransport := mcp.NewHTTPTransport(server, logger, validator)
+//	httpTransport.Start(ctx, "8080")
+//
+// # Protocol
+//
+// This implementation follows the MCP specification:
+//   - JSON-RPC 2.0 for all communication
+//   - Stdio transport for local servers
+//   - HTTP transport with Bearer token authentication
+//   - Standard MCP methods: initialize, tools/list, tools/call
+//
+// See https://modelcontextprotocol.io for full protocol documentation.
 package mcp
 
 import (

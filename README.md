@@ -3,16 +3,21 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/mhpenta/minimcp.svg)](https://pkg.go.dev/github.com/mhpenta/minimcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Zero dependency, permissive mini-MCP server implementation in Go.
-
-Implements basic [Model Context Protocol (MCP)](https://modelcontextprotocol.io) functionality. Assumes tool creators build accurate JSON schemas, for instance with the funcschema package of [mhpenta/jobj](https://github.com/mhpenta/jobj). Does not enforce schema validation.
+Lightweight, type-safe MCP server implementation in Go with automatic schema generation and resilient JSON parsing.
 
 ## Features
 
-- **Stdio transport** - For local MCP servers (Claude Desktop, etc.)
-- **HTTP transport** - With Bearer/API key authentication
-- **JSON-RPC 2.0** - Full protocol handler
-- **Tool execution** - Register and execute tools with proper schemas
+- **Full MCP Protocol** - Stdio and HTTP transports with JSON-RPC 2.0
+- **Type-Safe Tools** - Automatic schema generation from Go types using generics
+- **Resilient JSON** - Strict parsing by default, opt-in repair for malformed input
+- **Zero Config** - Create tools from plain Go functions with `tools.NewTool()`
+
+## Core Packages
+
+- **minimcp/mcp** - MCP server and transports (stdio/HTTP)
+- **minimcp/tools** - Tool interface and TypedTool for type-safe tool creation
+- **minimcp/infer** - Automatic JSON schema generation from Go types ([google/jsonschema-go](https://github.com/google/jsonschema-go))
+- **minimcp/safeunmarshal** - Resilient JSON unmarshalling with size limits and optional repair
 
 ## Installation
 
@@ -22,140 +27,187 @@ go get github.com/mhpenta/minimcp
 
 ## Quick Start
 
-### Stdio Transport (for Claude Desktop)
-
 ```go
 package main
 
 import (
     "context"
-    "log/slog"
-
     "github.com/mhpenta/minimcp/mcp"
     "github.com/mhpenta/minimcp/tools"
 )
 
-func main() {
-    logger := slog.Default()
+// Define your tool's input/output types
+type WeatherRequest struct {
+    City string `json:"city"`
+}
 
+type WeatherResponse struct {
+    Temperature float64 `json:"temperature"`
+    Conditions  string  `json:"conditions"`
+}
+
+// Write a handler function
+func getWeather(ctx context.Context, req WeatherRequest) (WeatherResponse, error) {
+    return WeatherResponse{Temperature: 22.5, Conditions: "Sunny"}, nil
+}
+
+func main() {
+    // Create tool from function - schema auto-generated
+    weatherTool := tools.NewTool("get_weather", "Get current weather", getWeather)
+
+    // Create and start server
     server := mcp.NewServer(mcp.ServerConfig{
-        Name:    "my-server",
+        Name:    "weather-server",
         Version: "1.0.0",
-        Tools:   []tools.Tool{/* your tools */},
-        Logger:  logger,
+        Tools:   []tools.Tool{weatherTool},
     })
 
-    transport := mcp.NewStdioTransport(server, logger)
+    transport := mcp.NewStdioTransport(server, nil)
     transport.Start(context.Background())
 }
 ```
 
-### HTTP Transport
-
-```go
-validator := mcp.NewDEVKeyValidator() // or implement your own
-httpTransport := mcp.NewHTTPTransport(server, logger, validator)
-httpTransport.Start(ctx, "8080")
-```
-
 ## Creating Tools
 
-Implement the `tools.Tool` interface:
+### TypedTool (Recommended)
+
+Use `tools.NewTool()` to create tools from handler functions. Schemas are automatically generated from your types:
+
+```go
+// Define types
+type CalculatorInput struct {
+    Operation string  `json:"operation"`
+    A         float64 `json:"a"`
+    B         float64 `json:"b"`
+}
+
+type CalculatorOutput struct {
+    Result float64 `json:"result"`
+}
+
+// Handler function
+func calculate(ctx context.Context, input CalculatorInput) (CalculatorOutput, error) {
+    var result float64
+    switch input.Operation {
+    case "add":
+        result = input.A + input.B
+    case "multiply":
+        result = input.A * input.B
+    default:
+        return CalculatorOutput{}, fmt.Errorf("unknown operation")
+    }
+    return CalculatorOutput{Result: result}, nil
+}
+
+// Create tool
+tool := tools.NewTool("calculator", "Performs arithmetic operations", calculate)
+```
+
+**Tool Options:**
+```go
+tool := tools.NewTool(
+    "my_tool",
+    "Description",
+    handler,
+    tools.WithVerb("Processing"),       // UI verb for progress display
+    tools.WithLongRunning(true),        // Hints this tool takes time
+    tools.WithType("custom_type"),      // Custom type identifier
+)
+```
+
+### Manual Tool Implementation
+
+For full control, implement the `Tool` interface using `infer` and `safeunmarshal` directly:
 
 ```go
 type MyTool struct{}
 
 func (t *MyTool) Spec() *tools.ToolSpec {
+    inputSchema, _ := infer.FromType[MyInput]()
+    outputSchema, _ := infer.FromType[MyOutput]()
+    inputMap, _ := infer.ToMap(inputSchema)
+    outputMap, _ := infer.ToMap(outputSchema)
+
     return &tools.ToolSpec{
         Name:        "my_tool",
         Description: "Does something useful",
-        Parameters: map[string]interface{}{
-            "type": "object",
-            "properties": map[string]interface{}{
-                "input": map[string]interface{}{
-                    "type": "string",
-                },
-            },
-        },
+        Parameters:  inputMap,
+        Output:      outputMap,
     }
 }
 
 func (t *MyTool) Execute(ctx context.Context, params json.RawMessage) (*tools.ToolResult, error) {
-    // Your tool logic here
-    return &tools.ToolResult{
-        Output: "result",
-    }, nil
+    input, err := safeunmarshal.To[MyInput](params)  // Strict by default
+    if err != nil {
+        return nil, err
+    }
+
+    output := processInput(input)
+    return &tools.ToolResult{Output: output}, nil
 }
 ```
 
-### Using with jobj/funcschema
+## Package Details
 
-For automatic schema generation from Go functions, use [jobj's funcschema](https://github.com/mhpenta/jobj):
+### minimcp/safeunmarshal
+
+Safe JSON unmarshalling with configurable strictness:
 
 ```go
-import (
-    "context"
-    "encoding/json"
+import "github.com/mhpenta/minimcp/safeunmarshal"
 
-    "github.com/mhpenta/minimcp/tools"
-    "github.com/mhpenta/jobj/funcschema"
-)
+// Strict mode (default) - only accepts well-formed JSON
+config, err := safeunmarshal.To[Config](data)
 
-// Define input/output types
-type StockPriceInput struct {
-    Symbol string `json:"symbol"`
-}
+// Lenient mode - attempts repair on malformed JSON
+config, err := safeunmarshal.ToLenient[Config](data)
 
-type StockPriceOutput struct {
-    Price      float64 `json:"price"`
-    MarketCap  float64 `json:"market_cap"`
-}
-
-type StockPriceTool struct{}
-
-// Handler function with typed parameters
-func (t *StockPriceTool) GetPrice(ctx context.Context, input StockPriceInput) (StockPriceOutput, error) {
-    // Your implementation here
-    return StockPriceOutput{Price: 150.50, MarketCap: 2.5e12}, nil
-}
-
-func (t *StockPriceTool) Spec() *tools.ToolSpec {
-    // Generate schemas from handler function signature
-    schemaIn, schemaOut, err := funcschema.SafeSchemasFromFunc(t.GetPrice)
-    if err != nil {
-        panic(err)
-    }
-
-    return &tools.ToolSpec{
-        Name:        "get_stock_price",
-        Description: "Fetches current stock price and market cap",
-        Parameters:  schemaIn,  // Auto-generated input schema
-        Output:      schemaOut, // Auto-generated output schema
-    }
-}
-
-func (t *StockPriceTool) Execute(ctx context.Context, params json.RawMessage) (*tools.ToolResult, error) {
-    var input StockPriceInput
-    if err := json.Unmarshal(params, &input); err != nil {  // Or use safeunmarshal from the jobj package
-        return nil, err
-    }
-
-    output, err := t.GetPrice(ctx, input)
-    if err != nil {
-        return nil, err
-    }
-
-    return &tools.ToolResult{
-        Output: output,
-    }, nil
-}
+// Custom options
+config, err := safeunmarshal.ToWithOptions[Config](data, safeunmarshal.UnmarshalOptions{
+    MaxInputSize: 1024 * 1024,  // 1MB limit (default 10MB)
+    EnableRepair: true,          // Enable JSON repair
+})
 ```
 
-This pattern:
-- Automatically generates JSON schemas from Go types
-- Provides type safety for inputs and outputs
-- Uses struct tags for schema constraints
-- No manual schema writing required
+Features:
+- **Strict by default** - Production-safe parsing
+- **Optional repair** - Handle malformed JSON from LLMs (use `ToLenient()`)
+- **Size limits** - Default 10MB max to prevent DoS
+- **Text extraction** - Finds JSON embedded in text
+
+### minimcp/infer
+
+Automatic schema generation from Go types:
+
+```go
+import "github.com/mhpenta/minimcp/infer"
+
+// From function signature
+inputSchema, outputSchema, err := infer.FromFunc(myHandler)
+
+// Convert to map for JSON encoding
+schemaMap, err := infer.ToMap(schema)
+```
+
+### minimcp/mcp
+
+MCP server with stdio and HTTP transports:
+
+```go
+// Stdio transport (for Claude Desktop)
+server := mcp.NewServer(mcp.ServerConfig{
+    Name:    "my-server",
+    Version: "1.0.0",
+    Tools:   []tools.Tool{myTool},
+})
+transport := mcp.NewStdioTransport(server, nil)
+transport.Start(ctx)
+
+// HTTP transport (for remote access)
+validator := mcp.NewDEVKeyValidator()  // or implement APIKeyValidator
+httpTransport := mcp.NewHTTPTransport(server, logger, validator)
+httpTransport.Start(ctx, "8080")
+```
 
 ## Testing
 
