@@ -2,47 +2,7 @@
 //
 // This package is a convenience wrapper around github.com/google/jsonschema-go that
 // provides a clean, type-safe API for generating JSON schemas from Go types and
-// function signatures. It's designed specifically for use with MCP tools but can
-// be used in any context requiring JSON schema generation.
-//
-// # Basic Usage
-//
-// Generate a schema from a Go type:
-//
-//	type User struct {
-//	    Name string `json:"name"`
-//	    Age  int    `json:"age"`
-//	}
-//
-//	schema, err := infer.FromType[User]()
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//
-// Generate schemas from a function signature:
-//
-//	func HandleUser(ctx context.Context, req UserRequest) (UserResponse, error) {
-//	    // implementation
-//	}
-//
-//	inputSchema, outputSchema, err := infer.FromFunc(HandleUser)
-//
-// Convert schema to map for JSON encoding:
-//
-//	schemaMap, err := infer.ToMap(schema)
-//
-// # Schema Customization
-//
-// Schemas can be customized using struct tags. The package supports standard
-// `json` tags and can be extended with schema validation tags supported by
-// google/jsonschema-go. See https://github.com/google/jsonschema-go for
-// full documentation on supported tags and options.
-//
-// # Type Safety
-//
-// All functions use Go generics to provide compile-time type safety. The type
-// parameter T in FromType[T]() and similar functions ensures that schema
-// generation is type-checked at compile time.
+// function signatures.
 package infer
 
 import (
@@ -51,21 +11,6 @@ import (
 	"fmt"
 	"github.com/google/jsonschema-go/jsonschema"
 )
-
-// FromType generates a JSON schema from a Go type using type inference.
-// This is a convenience wrapper around jsonschema.For that fits the infer API.
-//
-// Example:
-//
-//	type User struct {
-//	    Name string `json:"name"`
-//	    Age  int    `json:"age"`
-//	}
-//
-//	schema, err := infer.FromType[User]()
-func FromType[T any]() (*jsonschema.Schema, error) {
-	return jsonschema.For[T](nil)
-}
 
 // FromFunc generates input and output JSON schemas from a function signature.
 // The function must have the signature: func(context.Context, T) (R, error)

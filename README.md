@@ -7,7 +7,7 @@ Lightweight, type-safe MCP server implementation in Go with automatic schema gen
 
 ## Features
 
-- **Full MCP Protocol** - Stdio and HTTP transports with JSON-RPC 2.0
+- **MCP Tool Server** - Stdio and HTTP transports for serving tools via JSON-RPC 2.0
 - **Type-Safe Tools** - Automatic schema generation from Go types using generics
 - **Resilient JSON** - Strict parsing by default, opt-in repair for malformed input
 - **Zero Config** - Create tools from plain Go functions with `tools.NewTool()`
@@ -16,8 +16,8 @@ Lightweight, type-safe MCP server implementation in Go with automatic schema gen
 
 - **minimcp/mcp** - MCP server and transports (stdio/HTTP)
 - **minimcp/tools** - Tool interface and TypedTool for type-safe tool creation
-- **minimcp/infer** - Automatic JSON schema generation from Go types ([google/jsonschema-go](https://github.com/google/jsonschema-go))
-- **minimcp/safeunmarshal** - Resilient JSON unmarshalling with size limits and optional repair
+- **minimcp/infer** - Automatic JSON schema generation from Go types, using the new [google/jsonschema-go](https://github.com/google/jsonschema-go) package from the Go team.
+- **minimcp/safeunmarshal** - Resilient JSON unmarshalling with size limits, with optional (but potentially dangerous) auto repair features
 
 ## Installation
 
@@ -159,7 +159,7 @@ import "github.com/mhpenta/minimcp/safeunmarshal"
 // Strict mode (default) - only accepts well-formed JSON
 config, err := safeunmarshal.To[Config](data)
 
-// Lenient mode - attempts repair on malformed JSON
+// Lenient mode - attempts repair on malformed JSON, useful for marshaling non-critical LLM output from weak LLMs
 config, err := safeunmarshal.ToLenient[Config](data)
 
 // Custom options
