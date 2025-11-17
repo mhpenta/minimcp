@@ -5,6 +5,10 @@
 
 Lightweight, type-safe MCP server implementation in Go with automatic schema generation and resilient JSON parsing.
 
+## Requirements
+
+- Go 1.23.0 or later
+
 ## Features
 
 - **MCP Tool Server** - Stdio and HTTP transports for serving tools via JSON-RPC 2.0
@@ -208,6 +212,39 @@ validator := mcp.NewDEVKeyValidator()  // or implement APIKeyValidator
 httpTransport := mcp.NewHTTPTransport(server, logger, validator)
 httpTransport.Start(ctx, "8080")
 ```
+
+## Security
+
+### HTTP Transport Authentication
+
+⚠️ **IMPORTANT**: The `DEVKeyValidator` is **ONLY for development and testing**. It uses a hardcoded key (`please-change-me-dev-key`) and should **NEVER be used in production**.
+
+For production deployments, you must implement your own `APIKeyValidator`:
+
+```go
+type ProductionKeyValidator struct {
+    // Your secure key storage
+}
+
+func (v *ProductionKeyValidator) Validate(ctx context.Context, apiKey string) bool {
+    // Implement secure key validation
+    // - Check against a database or secure key store
+    // - Use constant-time comparison to prevent timing attacks
+    // - Consider rate limiting and logging
+    return secureCompare(apiKey, expectedKey)
+}
+
+// Use your validator
+validator := &ProductionKeyValidator{}
+httpTransport := mcp.NewHTTPTransport(server, logger, validator)
+```
+
+**Security best practices:**
+- Store API keys securely (environment variables, secret managers, etc.)
+- Use HTTPS in production (the HTTP transport does not provide encryption)
+- Implement rate limiting to prevent abuse
+- Log authentication attempts for security monitoring
+- Rotate keys regularly
 
 ## Examples
 
