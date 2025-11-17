@@ -74,15 +74,15 @@ func main() {
 Use `tools.NewTool()` to create tools from handler functions. Schemas are automatically generated from your types:
 
 ```go
-// Define types
+// Define types with jsonschema tags for rich descriptions
 type CalculatorInput struct {
-    Operation string  `json:"operation"`
-    A         float64 `json:"a"`
-    B         float64 `json:"b"`
+    Operation string  `json:"operation" jsonschema:"The arithmetic operation to perform (add, subtract, multiply, divide)"`
+    A         float64 `json:"a" jsonschema:"The first operand in the calculation"`
+    B         float64 `json:"b" jsonschema:"The second operand in the calculation"`
 }
 
 type CalculatorOutput struct {
-    Result float64 `json:"result"`
+    Result float64 `json:"result" jsonschema:"The computed result of the operation"`
 }
 
 // Handler function
@@ -194,7 +194,7 @@ schemaMap, err := infer.ToMap(schema)
 MCP server with stdio and HTTP transports:
 
 ```go
-// Stdio transport (for Claude Desktop)
+// Stdio transport (for Claude Code or Claude Desktop)
 server := mcp.NewServer(mcp.ServerConfig{
     Name:    "my-server",
     Version: "1.0.0",
@@ -208,6 +208,22 @@ validator := mcp.NewDEVKeyValidator()  // or implement APIKeyValidator
 httpTransport := mcp.NewHTTPTransport(server, logger, validator)
 httpTransport.Start(ctx, "8080")
 ```
+
+## Examples
+
+### SQL Server
+
+A complete example demonstrating how to create an MCP server with a read-only SQL query tool for PostgreSQL:
+
+```bash
+cd examples/sql_server
+go build -o sql-server main.go
+
+# Run with your database credentials
+./sql-server -dbname=mydb -user=postgres -password=secret
+```
+
+See [examples/sql_server/README.md](examples/sql_server/README.md) for detailed usage and configuration options.
 
 ## Testing
 
