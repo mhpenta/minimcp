@@ -3,15 +3,12 @@ package utilitytools
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/mhpenta/minimcp/infer"
-	"github.com/mhpenta/minimcp/safeunmarshal"
 	"github.com/mhpenta/minimcp/tools"
 )
 
@@ -20,80 +17,47 @@ type SQLToolParams struct {
 	Query string `json:"query" jsonschema:"SQL query to execute (read-only, only SELECT and WITH queries allowed)"`
 }
 
-// SQLTool provides LLM access to execute read-only SQL queries against the database
-type SQLTool struct {
-	db     *sql.DB
-	logger *slog.Logger
-}
-
-// NewSQLTool creates a new SQL query tool for LLM use
-func NewSQLTool(db *sql.DB, logger *slog.Logger) *SQLTool {
-
+// NewReadOnlySQLTool creates a new SQL query tool for LLM use
+func NewReadOnlySQLTool(db *sql.DB, logger *slog.Logger) tools.Tool {
 	if logger == nil {
 		logger = slog.Default()
 	}
 
-	return &SQLTool{
-		db:     db,
-		logger: logger,
-	}
-}
-
-// ExecuteQuery executes a read-only SQL query and returns results
-func (t *SQLTool) ExecuteQuery(
-	ctx context.Context,
-	params SQLToolParams) (*SQLQueryResult, error) {
-
-	if params.Query == "" {
-		return nil, fmt.Errorf("query parameter is required")
-	}
-
-	result, err := ExecuteSQLQuery(ctx, t.logger, t.db, params.Query)
-	if err != nil {
-		t.logger.Error("SQL query execution failed", "error", err)
-		return result, err
-	}
-
-	t.logger.Info("SQL query executed successfully",
-		"rows_returned", len(result.Rows),
-		"columns", len(result.Columns),
-		"execution_time_ms", result.ExecutionTime)
-
-	return result, nil
-}
-
-// Execute implements the tools.Tool interface
-func (t *SQLTool) Execute(ctx context.Context, params json.RawMessage) (*tools.ToolResult, error) {
-	paramsStruct, err := safeunmarshal.To[SQLToolParams](params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse parameters: %w", err)
-	}
-
-	result, err := t.ExecuteQuery(ctx, paramsStruct)
-	if err != nil {
-		// Return the result even on error, as it contains error details
-		if result != nil && !result.Success {
-			return &tools.ToolResult{
-				Output: result,
-				Error:  nil, // Error is in the result structure
-			}, nil
+	handler := func(ctx context.Context, params SQLToolParams) (*SQLQueryResult, error) {
+		if params.Query == "" {
+			return nil, fmt.Errorf("query parameter is required")
 		}
-		return nil, fmt.Errorf("failed to execute SQL query: %w", err)
+
+		result, err := ExecuteSQLQuery(ctx, logger, db, params.Query)
+		if err != nil {
+			logger.Error("SQL query execution failed", "error", err)
+			return result, err
+		}
+
+		logger.Info("SQL query executed successfully",
+			"rows_returned", len(result.Rows),
+			"columns", len(result.Columns),
+			"execution_time_ms", result.ExecutionTime)
+
+		return result, nil
 	}
 
-	return &tools.ToolResult{
-		Output: result,
-		Error:  nil,
-	}, nil
+	return tools.NewTool(
+		"ReadOnlySQLQuery",
+		readOnlySQLToolDescription,
+		handler,
+		tools.WithType("ReadOnlySQLQuery_v1"),
+		tools.WithVerb("Executing SQL query"),
+	)
 }
 
-const adminSQLToolDescription = `Executes read-only SQL queries against the PostgreSQL database for administrative analysis and debugging.
+const readOnlySQLToolDescription = `Executes read-only SQL queries against the database for administrative analysis and debugging.
 
 SECURITY FEATURES:
 - READ-ONLY MODE: Only SELECT and WITH (CTE) queries are allowed
 - All write operations are blocked (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE, COPY)
 - Whole-word keyword matching prevents false positives (e.g., "INNER JOIN" won't trigger "INSERT" block)
-- Backslash commands (psql meta-commands) are blocked
+- Database-specific meta-commands are blocked (e.g., backslash commands)
 - 30-second timeout on all queries
 
 ALLOWED QUERIES:
@@ -110,7 +74,7 @@ BLOCKED QUERIES:
 ✗ Any DDL: CREATE, DROP, ALTER, TRUNCATE
 ✗ Security: GRANT, REVOKE
 ✗ Data manipulation: COPY
-✗ Meta-commands: \d, \dt, etc.
+✗ Meta-commands
 
 COMMON USE CASES:
 - Explore database schema and table structures
@@ -118,46 +82,11 @@ COMMON USE CASES:
 - Debug data issues and verify data integrity
 - Generate reports and analytics
 
-IMPORTANT DATABASE INDEXES:
-- pg_tables: List all database tables
-- information_schema.columns: Explore table columns and types
-
 TIPS:
-- Start with "SELECT schemaname, tablename FROM pg_tables WHERE schemaname = 'public'" to explore tables
 - Use LIMIT to test queries before running on full datasets
 - Results include execution time and row counts
-- Query validation happens before execution to prevent accidental writes`
-
-// Spec implements the tools.Tool interface
-func (t *SQLTool) Spec() *tools.ToolSpec {
-	schemaIn, schemaOut, err := infer.FromFunc(t.ExecuteQuery)
-	if err != nil {
-		t.logger.Error("Failed to parse function schema for SQLTool", "error", err)
-		return nil
-	}
-
-	schemaInMap, err := infer.ToMap(schemaIn)
-	if err != nil {
-		t.logger.Error("Failed to parse function schema for SQLTool", "error", err)
-	}
-	schemaOutMap, err := infer.ToMap(schemaOut)
-	if err != nil {
-		t.logger.Error("Failed to parse function schema for SQLTool", "error", err)
-	}
-
-	return &tools.ToolSpec{
-		Name:        "AdminSQLQuery",
-		Type:        "AdminSQLQuery_v1",
-		Description: adminSQLToolDescription,
-		Parameters:  schemaInMap,
-		Output:      schemaOutMap,
-		Sequential:  false, // SQL queries can run in parallel, that's fine
-		UI: tools.UI{
-			Verb:        "Executing SQL query",
-			LongRunning: false,
-		},
-	}
-}
+- Query validation happens before execution to prevent accidental writes
+- Check your specific database documentation for system tables to list tables and columns (e.g. pg_tables in Postgres, sqlite_master in SQLite)`
 
 const (
 	defaultTimeout = 60 * time.Second

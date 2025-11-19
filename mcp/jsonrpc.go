@@ -3,7 +3,9 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+
 	"github.com/mhpenta/minimcp/tools"
 )
 
@@ -295,12 +297,28 @@ func (h *JSONRPCHandler) handleToolsCall(ctx context.Context, params json.RawMes
 	// Execute the tool
 	result, err := targetTool.Execute(ctx, callParams.Arguments)
 	if err != nil {
+		// Check if it's a specific tool error
+		var toolErr *tools.Error
+		if errors.As(err, &toolErr) {
+			// If the error code is within the reserved JSON-RPC error range (-32768 to -32000),
+			// we treat it as a protocol-level error and return it directly.
+			// This allows tools to return InvalidParams, InternalError, or other standard codes.
+			if toolErr.Code >= -32768 && toolErr.Code <= -32000 {
+				return nil, &RPCError{
+					Code:    toolErr.Code,
+					Message: toolErr.Message,
+					Data:    toolErr.Data,
+				}
+			}
+		}
+
 		h.server.logger.Error("MCP JSON-RPC tool execution failed",
 			"tool", callParams.Name,
 			"error", err.Error(),
 			"errorType", fmt.Sprintf("%T", err),
 			"arguments", string(callParams.Arguments),
 			"context", "mcp_jsonrpc_handler")
+
 		return ToolsCallResult{
 			Content: []ContentBlock{
 				{

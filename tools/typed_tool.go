@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/mhpenta/minimcp/infer"
 	"github.com/mhpenta/minimcp/safeunmarshal"
 )
@@ -22,7 +23,7 @@ func (t *TypedTool[In, Out]) Execute(ctx context.Context, params json.RawMessage
 	if len(params) > 0 {
 		parsedInput, err := safeunmarshal.To[In](params)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse parameters: %w", err)
+			return nil, NewInvalidParamsError(fmt.Sprintf("failed to parse parameters: %v", err))
 		}
 		input = parsedInput
 	}
