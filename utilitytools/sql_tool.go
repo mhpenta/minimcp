@@ -136,11 +136,11 @@ func (t *SQLTool) Spec() *tools.ToolSpec {
 		return nil
 	}
 
-	schemaInMpa, err := infer.ToMap(schemaIn)
+	schemaInMap, err := infer.ToMap(schemaIn)
 	if err != nil {
 		t.logger.Error("Failed to parse function schema for SQLTool", "error", err)
 	}
-	schemaOutMpa, err := infer.ToMap(schemaOut)
+	schemaOutMap, err := infer.ToMap(schemaOut)
 	if err != nil {
 		t.logger.Error("Failed to parse function schema for SQLTool", "error", err)
 	}
@@ -149,9 +149,9 @@ func (t *SQLTool) Spec() *tools.ToolSpec {
 		Name:        "AdminSQLQuery",
 		Type:        "AdminSQLQuery_v1",
 		Description: adminSQLToolDescription,
-		Parameters:  schemaInMpa,
-		Output:      schemaOutMpa,
-		Sequential:  false, // SQL queries can run in parallel
+		Parameters:  schemaInMap,
+		Output:      schemaOutMap,
+		Sequential:  false, // SQL queries can run in parallel, that's fine
 		UI: tools.UI{
 			Verb:        "Executing SQL query",
 			LongRunning: false,
