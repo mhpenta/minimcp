@@ -46,7 +46,6 @@ func NewReadOnlySQLTool(db *sql.DB, logger *slog.Logger) tools.Tool {
 		"ReadOnlySQLQuery",
 		readOnlySQLToolDescription,
 		handler,
-		tools.WithType("ReadOnlySQLQuery_v1"),
 		tools.WithVerb("Executing SQL query"),
 	)
 }
