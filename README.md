@@ -3,7 +3,18 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/mhpenta/minimcp.svg)](https://pkg.go.dev/github.com/mhpenta/minimcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Lightweight, type-safe MCP server implementation in Go with automatic schema generation and resilient JSON parsing.
+Lightweight, type-safe MCP server implementation in Go with automatic schema generation and resilient JSON parsing. 
+
+It is designed for quick incorporation into the development cycle, not for production. 
+
+Designed for my own work flow - I want a MCP tool to see my database clearly as we work. The utilitytools package contains some dev tools I repeatedly bundle into a dev-only MCP:
+
+* Read only sql executor
+* Screenshot tool
+* Elastic query tool
+* Google Cloud Storage tool
+
+Note: these tools represent are reason for the dependencies in go.mod and may be split out in a future version of minimcp. 
 
 ## Requirements
 
@@ -126,9 +137,11 @@ For full control, implement the `Tool` interface using `infer` and `safeunmarsha
 ```go
 type MyTool struct{}
 
+// Dummy handler for schema generation
+func myHandler(ctx context.Context, in MyInput) (MyOutput, error) { return MyOutput{}, nil }
+
 func (t *MyTool) Spec() *tools.ToolSpec {
-    inputSchema, _ := infer.FromType[MyInput]()
-    outputSchema, _ := infer.FromType[MyOutput]()
+    inputSchema, outputSchema, _ := infer.FromFunc(myHandler)
     inputMap, _ := infer.ToMap(inputSchema)
     outputMap, _ := infer.ToMap(outputSchema)
 
@@ -245,22 +258,6 @@ httpTransport := mcp.NewHTTPTransport(server, logger, validator)
 - Implement rate limiting to prevent abuse
 - Log authentication attempts for security monitoring
 - Rotate keys regularly
-
-## Examples
-
-### SQL Server
-
-A complete example demonstrating how to create an MCP server with a read-only SQL query tool for PostgreSQL:
-
-```bash
-cd examples/sql_server
-go build -o sql-server main.go
-
-# Run with your database credentials
-./sql-server -dbname=mydb -user=postgres -password=secret
-```
-
-See [examples/sql_server/README.md](examples/sql_server/README.md) for detailed usage and configuration options.
 
 ## Testing
 
