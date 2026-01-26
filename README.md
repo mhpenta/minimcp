@@ -3,36 +3,18 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/mhpenta/minimcp.svg)](https://pkg.go.dev/github.com/mhpenta/minimcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Lightweight, type-safe MCP server implementation in Go with automatic schema generation and resilient JSON parsing. 
+Lightweight MCP server in Go. Designed for quick dev integration, not for production. 
 
-It is designed for quick incorporation into the development cycle, not for production. 
+**Features:** Stdio/HTTP transports • Type-safe tools • Auto schema generation • Resilient JSON parsing • Response size limits
 
-Designed for my own work flow - I want a MCP tool to see my database clearly as we work. The utilitytools package contains some dev tools I repeatedly bundle into a dev-only MCP:
+**Packages:**
+- `minimcp/mcp` - Server and transports (stdio/HTTP)
+- `minimcp/tools` - Type-safe tool creation
+- `minimcp/infer` - Schema generation via [google/jsonschema-go](https://github.com/google/jsonschema-go)
+- `minimcp/safeunmarshal` - Safe JSON parsing with optional repair
+- `minimcp/utilitytools` - Dev utilities (SQL, screenshots, Elastic, GCS)
 
-* Read only sql executor
-* Screenshot tool
-* Elastic query tool
-* Google Cloud Storage tool
-
-Note: these tools represent are reason for the dependencies in go.mod and may be split out in a future version of minimcp. 
-
-## Requirements
-
-- Go 1.23.0 or later
-
-## Features
-
-- **MCP Tool Server** - Stdio and HTTP transports for serving tools via JSON-RPC 2.0
-- **Type-Safe Tools** - Automatic schema generation from Go types using generics
-- **Resilient JSON** - Strict parsing by default, opt-in repair for malformed input
-- **Zero Config** - Create tools from plain Go functions with `tools.NewTool()`
-
-## Core Packages
-
-- **minimcp/mcp** - MCP server and transports (stdio/HTTP)
-- **minimcp/tools** - Tool interface and TypedTool for type-safe tool creation
-- **minimcp/infer** - Automatic JSON schema generation from Go types, using the new [google/jsonschema-go](https://github.com/google/jsonschema-go) package from the Go team.
-- **minimcp/safeunmarshal** - Resilient JSON unmarshalling with size limits, with optional (but potentially dangerous) auto repair features
+**Requirements:** Go 1.23.0+
 
 ## Installation
 
@@ -43,236 +25,108 @@ go get github.com/mhpenta/minimcp
 ## Quick Start
 
 ```go
-package main
+type Input struct { City string `json:"city"` }
+type Output struct { Temp float64 `json:"temp"` }
 
-import (
-    "context"
-    "github.com/mhpenta/minimcp/mcp"
-    "github.com/mhpenta/minimcp/tools"
-)
-
-// Define your tool's input/output types
-type WeatherRequest struct {
-    City string `json:"city"`
-}
-
-type WeatherResponse struct {
-    Temperature float64 `json:"temperature"`
-    Conditions  string  `json:"conditions"`
-}
-
-// Write a handler function
-func getWeather(ctx context.Context, req WeatherRequest) (WeatherResponse, error) {
-    return WeatherResponse{Temperature: 22.5, Conditions: "Sunny"}, nil
+func getWeather(ctx context.Context, in Input) (Output, error) {
+    return Output{Temp: 22.5}, nil
 }
 
 func main() {
-    // Create tool from function - schema auto-generated
-    weatherTool := tools.NewTool("get_weather", "Get current weather", getWeather)
-
-    // Create and start server
+    tool := tools.NewTool("weather", "Get weather", getWeather)
     server := mcp.NewServer(mcp.ServerConfig{
-        Name:    "weather-server",
-        Version: "1.0.0",
-        Tools:   []tools.Tool{weatherTool},
+        Name: "weather-server", Version: "1.0.0", Tools: []tools.Tool{tool},
     })
-
-    transport := mcp.NewStdioTransport(server, nil)
-    transport.Start(context.Background())
+    mcp.NewStdioTransport(server, nil).Start(context.Background())
 }
 ```
 
 ## Creating Tools
 
-### TypedTool (Recommended)
-
-Use `tools.NewTool()` to create tools from handler functions. Schemas are automatically generated from your types:
+Use `tools.NewTool()` - schemas auto-generated from types:
 
 ```go
-// Define types with jsonschema tags for rich descriptions
-type CalculatorInput struct {
-    Operation string  `json:"operation" jsonschema:"The arithmetic operation to perform (add, subtract, multiply, divide)"`
-    A         float64 `json:"a" jsonschema:"The first operand in the calculation"`
-    B         float64 `json:"b" jsonschema:"The second operand in the calculation"`
+type CalcInput struct {
+    Op string  `json:"op" jsonschema:"Operation: add, multiply"`
+    A  float64 `json:"a"`
+    B  float64 `json:"b"`
 }
 
-type CalculatorOutput struct {
-    Result float64 `json:"result" jsonschema:"The computed result of the operation"`
+func calc(ctx context.Context, in CalcInput) (float64, error) {
+    if in.Op == "add" { return in.A + in.B, nil }
+    return in.A * in.B, nil
 }
 
-// Handler function
-func calculate(ctx context.Context, input CalculatorInput) (CalculatorOutput, error) {
-    var result float64
-    switch input.Operation {
-    case "add":
-        result = input.A + input.B
-    case "multiply":
-        result = input.A * input.B
-    default:
-        return CalculatorOutput{}, fmt.Errorf("unknown operation")
-    }
-    return CalculatorOutput{Result: result}, nil
-}
-
-// Create tool
-tool := tools.NewTool("calculator", "Performs arithmetic operations", calculate)
-```
-
-**Tool Options:**
-```go
-tool := tools.NewTool(
-    "my_tool",
-    "Description",
-    handler,
-    tools.WithVerb("Processing"),       // UI verb for progress display
-    tools.WithLongRunning(true),        // Hints this tool takes time
-    tools.WithType("custom_type"),      // Custom type identifier
+tool := tools.NewTool("calc", "Calculator", calc,
+    tools.WithVerb("Computing"),    // UI progress verb
+    tools.WithLongRunning(true),    // Hints tool takes time
 )
 ```
 
-### Manual Tool Implementation
-
-For full control, implement the `Tool` interface using `infer` and `safeunmarshal` directly:
+**Manual implementation** (for full control, implement `Tool` interface):
 
 ```go
-type MyTool struct{}
-
-// Dummy handler for schema generation
-func myHandler(ctx context.Context, in MyInput) (MyOutput, error) { return MyOutput{}, nil }
-
 func (t *MyTool) Spec() *tools.ToolSpec {
     inputSchema, outputSchema, _ := infer.FromFunc(myHandler)
     inputMap, _ := infer.ToMap(inputSchema)
-    outputMap, _ := infer.ToMap(outputSchema)
-
-    return &tools.ToolSpec{
-        Name:        "my_tool",
-        Description: "Does something useful",
-        Parameters:  inputMap,
-        Output:      outputMap,
-    }
+    return &tools.ToolSpec{Name: "my_tool", Description: "...", Parameters: inputMap}
 }
 
 func (t *MyTool) Execute(ctx context.Context, params json.RawMessage) (*tools.ToolResult, error) {
-    input, err := safeunmarshal.To[MyInput](params)  // Strict by default
-    if err != nil {
-        return nil, err
-    }
-
-    output := processInput(input)
-    return &tools.ToolResult{Output: output}, nil
+    input, err := safeunmarshal.To[MyInput](params)
+    if err != nil { return nil, err }
+    return &tools.ToolResult{Output: processInput(input)}, nil
 }
 ```
 
-## Package Details
+## Configuration
 
-### minimcp/safeunmarshal
-
-Safe JSON unmarshalling with configurable strictness:
-
+**Response Size Limits:**
 ```go
-import "github.com/mhpenta/minimcp/safeunmarshal"
+server := mcp.NewServer(mcp.ServerConfig{
+    MaxResponseBytes: 50000,  // Truncate at 50KB (0 = no limit)
+})
+// Truncated responses include: [TRUNCATED: original_size=X bytes, showing=Y bytes, truncated=Z bytes]
+```
 
-// Strict mode (default) - only accepts well-formed JSON
-config, err := safeunmarshal.To[Config](data)
-
-// Lenient mode - attempts repair on malformed JSON, useful for marshaling non-critical LLM output from weak LLMs
-config, err := safeunmarshal.ToLenient[Config](data)
-
-// Custom options
+**JSON Parsing:**
+```go
+config, err := safeunmarshal.To[Config](data)              // Strict (default)
+config, err := safeunmarshal.ToLenient[Config](data)       // Repair malformed JSON
 config, err := safeunmarshal.ToWithOptions[Config](data, safeunmarshal.UnmarshalOptions{
     MaxInputSize: 1024 * 1024,  // 1MB limit (default 10MB)
-    EnableRepair: true,          // Enable JSON repair
+    EnableRepair: true,
 })
 ```
 
-Features:
-- **Strict by default** - Production-safe parsing
-- **Optional repair** - Handle malformed JSON from LLMs (use `ToLenient()`)
-- **Size limits** - Default 10MB max to prevent DoS
-- **Text extraction** - Finds JSON embedded in text
-
-### minimcp/infer
-
-Automatic schema generation from Go types:
-
+**Transports:**
 ```go
-import "github.com/mhpenta/minimcp/infer"
+// Stdio (for Claude Code/Desktop)
+mcp.NewStdioTransport(server, nil).Start(ctx)
 
-// From function signature
-inputSchema, outputSchema, err := infer.FromFunc(myHandler)
-
-// Convert to map for JSON encoding
-schemaMap, err := infer.ToMap(schema)
-```
-
-### minimcp/mcp
-
-MCP server with stdio and HTTP transports:
-
-```go
-// Stdio transport (for Claude Code or Claude Desktop)
-server := mcp.NewServer(mcp.ServerConfig{
-    Name:    "my-server",
-    Version: "1.0.0",
-    Tools:   []tools.Tool{myTool},
-})
-transport := mcp.NewStdioTransport(server, nil)
-transport.Start(ctx)
-
-// HTTP transport (for remote access)
-validator := mcp.NewDEVKeyValidator()  // or implement APIKeyValidator
-httpTransport := mcp.NewHTTPTransport(server, logger, validator)
-httpTransport.Start(ctx, "8080")
+// HTTP (remote access)
+validator := mcp.NewDEVKeyValidator()  // Dev only - implement APIKeyValidator for prod
+mcp.NewHTTPTransport(server, logger, validator).Start(ctx, "8080")
 ```
 
 ## Security
 
-### HTTP Transport Authentication
+⚠️ `DEVKeyValidator` uses hardcoded key `please-change-me-dev-key` - **dev only**.
 
-⚠️ **IMPORTANT**: The `DEVKeyValidator` is **ONLY for development and testing**. It uses a hardcoded key (`please-change-me-dev-key`) and should **NEVER be used in production**.
-
-For production deployments, you must implement your own `APIKeyValidator`:
-
+**Production:** Implement `APIKeyValidator` interface:
 ```go
-type ProductionKeyValidator struct {
-    // Your secure key storage
+func (v *ProdValidator) Validate(ctx context.Context, key string) bool {
+    return secureCompare(key, expectedKey)  // Constant-time comparison
 }
-
-func (v *ProductionKeyValidator) Validate(ctx context.Context, apiKey string) bool {
-    // Implement secure key validation
-    // - Check against a database or secure key store
-    // - Use constant-time comparison to prevent timing attacks
-    // - Consider rate limiting and logging
-    return secureCompare(apiKey, expectedKey)
-}
-
-// Use your validator
-validator := &ProductionKeyValidator{}
-httpTransport := mcp.NewHTTPTransport(server, logger, validator)
 ```
 
-**Security best practices:**
-- Store API keys securely (environment variables, secret managers, etc.)
-- Use HTTPS in production (the HTTP transport does not provide encryption)
-- Implement rate limiting to prevent abuse
-- Log authentication attempts for security monitoring
-- Rotate keys regularly
+Best practices: HTTPS • Secure key storage • Rate limiting • Key rotation
+Best practices: Don't use minimcp in production
 
 ## Testing
 
 ```bash
-# Run tests
-go test ./...
-
-# Check coverage
-go test ./... -cover
-
-# View coverage report
-go test ./... -coverprofile=coverage.out
-go tool cover -html=coverage.out
+go test ./...                                        # Run tests
+go test ./... -coverprofile=coverage.out             # Coverage report
+go tool cover -html=coverage.out                     # View coverage
 ```
-
-## License
-
-MIT License - see [LICENSE](LICENSE) file for details
