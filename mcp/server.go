@@ -51,18 +51,20 @@ import (
 
 // Server represents an MCP server that exposes tools
 type Server struct {
-	name    string
-	version string
-	tools   []tools.Tool
-	logger  *slog.Logger
+	name             string
+	version          string
+	tools            []tools.Tool
+	logger           *slog.Logger
+	maxResponseBytes int
 }
 
 // ServerConfig holds configuration for the MCP server
 type ServerConfig struct {
-	Name    string
-	Version string
-	Tools   []tools.Tool
-	Logger  *slog.Logger
+	Name             string
+	Version          string
+	Tools            []tools.Tool
+	Logger           *slog.Logger
+	MaxResponseBytes int // Maximum response size in bytes. 0 = no limit. Responses exceeding this will be truncated with an indicator.
 }
 
 // NewServer creates a new MCP server with the provided tools
@@ -72,10 +74,11 @@ func NewServer(cfg ServerConfig) *Server {
 	}
 
 	server := &Server{
-		name:    cfg.Name,
-		version: cfg.Version,
-		tools:   cfg.Tools,
-		logger:  cfg.Logger,
+		name:             cfg.Name,
+		version:          cfg.Version,
+		tools:            cfg.Tools,
+		logger:           cfg.Logger,
+		maxResponseBytes: cfg.MaxResponseBytes,
 	}
 
 	server.logger.Info("initialized MCP server",

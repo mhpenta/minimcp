@@ -281,7 +281,7 @@ func (t *HTTPTransport) handleCallTool(w http.ResponseWriter, r *http.Request) {
 	if result.Error != nil {
 		text = *result.Error
 	} else if result.Output != nil {
-		text = tools.MarshalOutput(t.logger, result.Output)
+		text = tools.MarshalOutput(t.logger, result.Output, t.server.maxResponseBytes)
 	} else if result.System != nil {
 		text = *result.System
 	} else {

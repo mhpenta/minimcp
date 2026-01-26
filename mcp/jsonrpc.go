@@ -335,7 +335,7 @@ func (h *JSONRPCHandler) handleToolsCall(ctx context.Context, params json.RawMes
 	if result.Error != nil {
 		text = *result.Error
 	} else if result.Output != nil {
-		text = tools.MarshalOutput(h.server.logger, result.Output)
+		text = tools.MarshalOutput(h.server.logger, result.Output, h.server.maxResponseBytes)
 	} else if result.System != nil {
 		text = *result.System
 	} else {
