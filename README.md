@@ -3,16 +3,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/mhpenta/minimcp.svg)](https://pkg.go.dev/github.com/mhpenta/minimcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Lightweight MCP server in Go. Designed for quick dev integration, not for production. 
-
-**Features:** Stdio/HTTP transports • Type-safe tools • Auto schema generation • Resilient JSON parsing • Response size limits
-
-**Packages:**
-- `minimcp/mcp` - Server and transports (stdio/HTTP)
-- `minimcp/tools` - Type-safe tool creation
-- `minimcp/infer` - Schema generation via [google/jsonschema-go](https://github.com/google/jsonschema-go)
-- `minimcp/safeunmarshal` - Safe JSON parsing with optional repair
-- `minimcp/utilitytools` - Dev utilities (SQL, screenshots, Elastic, GCS)
+Lightweight MCP server in Go. Designed for quick dev integration, not for production.
 
 **Requirements:** Go 1.23.0+
 
@@ -86,7 +77,6 @@ func (t *MyTool) Execute(ctx context.Context, params json.RawMessage) (*tools.To
 server := mcp.NewServer(mcp.ServerConfig{
     MaxResponseBytes: 50000,  // Truncate at 50KB (0 = no limit)
 })
-// Truncated responses include: [TRUNCATED: original_size=X bytes, showing=Y bytes, truncated=Z bytes]
 ```
 
 **JSON Parsing:**
@@ -120,8 +110,15 @@ func (v *ProdValidator) Validate(ctx context.Context, key string) bool {
 }
 ```
 
-Best practices: HTTPS • Secure key storage • Rate limiting • Key rotation
-Best practices: Don't use minimcp in production
+* Best practices: Don't use minimcp in production
+
+## Packages
+
+- **minimcp/mcp** - Server and transports (stdio/HTTP)
+- **minimcp/tools** - Type-safe tool creation
+- **minimcp/infer** - Schema generation via [google/jsonschema-go](https://github.com/google/jsonschema-go)
+- **minimcp/safeunmarshal** - Safe JSON parsing with optional repair
+- **minimcp/utilitytools** - Dev utilities (SQL, screenshots, Elastic, GCS)
 
 ## Testing
 
@@ -130,3 +127,7 @@ go test ./...                                        # Run tests
 go test ./... -coverprofile=coverage.out             # Coverage report
 go tool cover -html=coverage.out                     # View coverage
 ```
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
